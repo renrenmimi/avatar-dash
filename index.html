@@ -122,7 +122,10 @@
   const T = 40;                 // tile size
   const GRAVITY = 2400;         // px/s²
   const MOVE = 1500, MAXVX = 340, FRICTION = 1800;
-  const JUMP_V = 760;           // initial jump velocity
+  // Initial jump velocity. The tallest step in the level is 3 tiles (120px); with
+  // gravity at 2400 this clears it by ~27px, which is the margin that stops the jump
+  // from feeling pixel-perfect. Lower values look fine on paper and fail in play.
+  const JUMP_V = 850;
   const JUMP_CUT = 0.45;        // release early → clip the rise
   const COYOTE = 0.10, BUFFER = 0.12;
   const STOMP_BOUNCE = 520;
