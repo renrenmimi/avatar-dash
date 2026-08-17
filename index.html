@@ -75,6 +75,7 @@
     <div class="pill"><span class="k">score</span><span class="v" id="hudScore">0</span></div>
     <div class="pill"><span class="k">time</span><span class="v" id="hudTime">0.0</span></div>
     <div class="pill"><span class="life-dot"></span><span class="k">lives</span><span class="v" id="hudLives">3</span></div>
+    <div class="pill"><span class="k">jump</span><span class="v" id="hudJump">—</span></div>
   </div>
 
   <div class="overlay on" id="overlay">
@@ -131,8 +132,8 @@
   // The earlier approach (scale the velocity down on release) only mattered within ~37ms
   // of takeoff; after that the velocity had already decayed past the clamp on its own, so
   // every press longer than a frame or two produced an identical height.
-  const JUMP_V = 820;       // tapped → peaks ~140px
-  const HOLD_GRAV = 0.72;   // gravity multiplier while rising with the key held
+  const JUMP_V = 820;       // tapped → peaks ~140px; held → ~233px
+  const HOLD_GRAV = 0.60;   // gravity multiplier while rising with the key held
   const JUMP_CUT = 0.45;        // release early → clip the rise
   const COYOTE = 0.10, BUFFER = 0.12;
   const STOMP_BOUNCE = 520;
@@ -177,7 +178,8 @@
   // ── state ─────────────────────────────────────────────────────────────────
   const player = {
     x: 0, y: 0, w: 34, h: 34, vx: 0, vy: 0,
-    onGround: false, face: 1, coyote: 0, buffer: 0, jumpHeld: false, spin: 0, dead: false
+    onGround: false, face: 1, coyote: 0, buffer: 0, jumpHeld: false, spin: 0, dead: false,
+    jumpFromY: 0, peak: 0, lastJump: 0
   };
   let coins = [], enemies = [], particles = [];
   let cam = 0, elapsed = 0, score = 0, got = 0, lives = 3;
@@ -185,7 +187,7 @@
   let shake = 0, flagRaise = 0;
 
   const $ = id => document.getElementById(id);
-  const hud = { c: $("hudCoins"), s: $("hudScore"), t: $("hudTime"), l: $("hudLives") };
+  const hud = { c: $("hudCoins"), s: $("hudScore"), t: $("hudTime"), l: $("hudLives"), j: $("hudJump") };
   const overlay = $("overlay"), card = $("card");
 
   function reset(full) {
@@ -262,6 +264,7 @@
     player.buffer = Math.max(0, player.buffer - dt);
     if (player.buffer > 0 && player.coyote > 0) {
       player.vy = -JUMP_V; player.onGround = false; player.coyote = 0; player.buffer = 0; player.jumpHeld = true;
+      player.jumpFromY = player.y; player.peak = 0;
       puff(player.x + player.w / 2, player.y + player.h, 6, "rgba(255,255,255,.5)");
     }
     // Let go, or start falling, and the assist ends for this jump — pressing again in
@@ -270,7 +273,13 @@
 
     const g = player.jumpHeld ? GRAVITY * HOLD_GRAV : GRAVITY;
     player.vy = Math.min(player.vy + g * dt, 1400);
+    const wasAir = !player.onGround;
     moveAxis(player, player.vx * dt, player.vy * dt);
+    // track how high this jump actually went, so the HUD can show it
+    if (player.jumpFromY) {
+      player.peak = Math.max(player.peak, player.jumpFromY - player.y);
+      if (wasAir && player.onGround) { player.lastJump = player.peak; player.jumpFromY = 0; }
+    }
     // keep the player inside the level horizontally — otherwise you can walk off
     // the left edge and out of frame, since the camera clamps but the player did not
     if (player.x < 0) { player.x = 0; player.vx = 0; }
@@ -330,6 +339,7 @@
     hud.s.textContent = score;
     hud.t.textContent = elapsed.toFixed(1);
     hud.l.textContent = lives;
+    hud.j.textContent = player.lastJump ? Math.round(player.lastJump) + "px" : "—";
   }
 
   function puff(x, y, n, color) {
