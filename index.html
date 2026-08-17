@@ -132,8 +132,8 @@
   // The earlier approach (scale the velocity down on release) only mattered within ~37ms
   // of takeoff; after that the velocity had already decayed past the clamp on its own, so
   // every press longer than a frame or two produced an identical height.
-  const JUMP_V = 820;       // tapped → peaks ~140px; held → ~233px
-  const HOLD_GRAV = 0.60;   // gravity multiplier while rising with the key held
+  const JUMP_V = 730;       // tapped → ~111px (3.3x body height)
+  const HOLD_GRAV = 0.63;   // held → ~176px (5.2x body height, matching the genre)
   const JUMP_CUT = 0.45;        // release early → clip the rise
   const COYOTE = 0.10, BUFFER = 0.12;
   const STOMP_BOUNCE = 520;
@@ -148,9 +148,9 @@
     "                                                                                            ",
     "               C     111111        C C                    1111111        C C C              ",
     "                                                                                          F ",
+    "                                                                                            ",
     "        C           E                  E                            E                   111",
     "      1111        11111111        1111111111         111111111111111111111            111   ",
-    "                                                                                            ",
     "  P                                                                                         ",
     "11111111      11111111111      111111       11111111111111        1111111111111111111111    ",
     "11111111      11111111111      111111       11111111111111        1111111111111111111111    ",
