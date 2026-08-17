@@ -122,10 +122,15 @@
   const T = 40;                 // tile size
   const GRAVITY = 2400;         // px/s²
   const MOVE = 1500, MAXVX = 340, FRICTION = 1800;
-  // Initial jump velocity. The tallest step in the level is 3 tiles (120px); with
-  // gravity at 2400 this clears it by ~27px, which is the margin that stops the jump
-  // from feeling pixel-perfect. Lower values look fine on paper and fail in play.
-  const JUMP_V = 850;
+  // Jump velocities. The tallest step in the level is 3 tiles (120px).
+  //
+  // JUMP_V is what a held jump gives you. MIN_JUMP_V is the floor applied when you let
+  // go early — without it, releasing the key scaled the velocity down by JUMP_CUT and a
+  // normal tap (50-150ms) peaked at 34-108px, i.e. the level could not be cleared by
+  // anyone who does not hold the key for 300ms. Variable jump height is a feature; a
+  // jump that silently fails to reach the only path forward is not.
+  const JUMP_V = 900;       // held  → peaks ~169px
+  const MIN_JUMP_V = 810;   // tapped → peaks ~137px, still clears the 120px step
   const JUMP_CUT = 0.45;        // release early → clip the rise
   const COYOTE = 0.10, BUFFER = 0.12;
   const STOMP_BOUNCE = 520;
@@ -257,7 +262,12 @@
       player.vy = -JUMP_V; player.onGround = false; player.coyote = 0; player.buffer = 0; player.jumpHeld = true;
       puff(player.x + player.w / 2, player.y + player.h, 6, "rgba(255,255,255,.5)");
     }
-    if (player.jumpHeld && !keys.jump && player.vy < 0) { player.vy *= JUMP_CUT; player.jumpHeld = false; }
+    // Releasing early shortens the jump, but never below MIN_JUMP_V — otherwise a quick
+    // tap cannot clear the level's tallest step and the game looks broken.
+    if (player.jumpHeld && !keys.jump && player.vy < -MIN_JUMP_V) {
+      player.vy = -MIN_JUMP_V;
+      player.jumpHeld = false;
+    }
     if (player.vy >= 0) player.jumpHeld = false;
 
     player.vy = Math.min(player.vy + GRAVITY * dt, 1400);
