@@ -122,15 +122,17 @@
   const T = 40;                 // tile size
   const GRAVITY = 2400;         // px/s²
   const MOVE = 1500, MAXVX = 340, FRICTION = 1800;
-  // Jump velocities. The tallest step in the level is 3 tiles (120px).
+  // Jump. The tallest step in the level is 3 tiles (120px).
   //
-  // JUMP_V is what a held jump gives you. MIN_JUMP_V is the floor applied when you let
-  // go early — without it, releasing the key scaled the velocity down by JUMP_CUT and a
-  // normal tap (50-150ms) peaked at 34-108px, i.e. the level could not be cleared by
-  // anyone who does not hold the key for 300ms. Variable jump height is a feature; a
-  // jump that silently fails to reach the only path forward is not.
-  const JUMP_V = 900;       // held  → peaks ~169px
-  const MIN_JUMP_V = 810;   // tapped → peaks ~137px, still clears the 120px step
+  // Every jump starts at JUMP_V, which on its own peaks at ~140px — enough to clear the
+  // level even if you only tap. Holding the key applies reduced gravity while rising, so
+  // a held jump keeps climbing to ~195px.
+  //
+  // The earlier approach (scale the velocity down on release) only mattered within ~37ms
+  // of takeoff; after that the velocity had already decayed past the clamp on its own, so
+  // every press longer than a frame or two produced an identical height.
+  const JUMP_V = 820;       // tapped → peaks ~140px
+  const HOLD_GRAV = 0.72;   // gravity multiplier while rising with the key held
   const JUMP_CUT = 0.45;        // release early → clip the rise
   const COYOTE = 0.10, BUFFER = 0.12;
   const STOMP_BOUNCE = 520;
@@ -262,15 +264,12 @@
       player.vy = -JUMP_V; player.onGround = false; player.coyote = 0; player.buffer = 0; player.jumpHeld = true;
       puff(player.x + player.w / 2, player.y + player.h, 6, "rgba(255,255,255,.5)");
     }
-    // Releasing early shortens the jump, but never below MIN_JUMP_V — otherwise a quick
-    // tap cannot clear the level's tallest step and the game looks broken.
-    if (player.jumpHeld && !keys.jump && player.vy < -MIN_JUMP_V) {
-      player.vy = -MIN_JUMP_V;
-      player.jumpHeld = false;
-    }
-    if (player.vy >= 0) player.jumpHeld = false;
+    // Let go, or start falling, and the assist ends for this jump — pressing again in
+    // mid-air must not restart it.
+    if (!keys.jump || player.vy >= 0) player.jumpHeld = false;
 
-    player.vy = Math.min(player.vy + GRAVITY * dt, 1400);
+    const g = player.jumpHeld ? GRAVITY * HOLD_GRAV : GRAVITY;
+    player.vy = Math.min(player.vy + g * dt, 1400);
     moveAxis(player, player.vx * dt, player.vy * dt);
     // keep the player inside the level horizontally — otherwise you can walk off
     // the left edge and out of frame, since the camera clamps but the player did not
