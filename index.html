@@ -72,6 +72,7 @@
 
   <div class="hud">
     <div class="pill"><span class="coin-dot"></span><span class="k">coins</span><span class="v" id="hudCoins">0</span></div>
+    <div class="pill"><span class="k">level</span><span class="v" id="hudLevel">1/3</span></div>
     <div class="pill"><span class="k">score</span><span class="v" id="hudScore">0</span></div>
     <div class="pill"><span class="k">time</span><span class="v" id="hudTime">0.0</span></div>
     <div class="pill"><span class="life-dot"></span><span class="k">lives</span><span class="v" id="hudLives">3</span></div>
@@ -139,8 +140,8 @@
   const STOMP_BOUNCE = 520;
   const DT = 1 / 120;           // fixed physics step
 
-  // ── level: 1 = solid, C = coin, E = enemy, F = flag, P = player start ─────
-  const MAP = [
+  // ── levels: 1 = solid, C = coin, E = enemy, F = flag, P = player start ────
+  const LEVELS = [[
     "                                                                                            ",
     "                                                                                            ",
     "                                                                                            ",
@@ -154,26 +155,60 @@
     "  P                                                                                         ",
     "11111111      11111111111      111111       11111111111111        1111111111111111111111    ",
     "11111111      11111111111      111111       11111111111111        1111111111111111111111    ",
-  ];
-  const COLS = Math.max(...MAP.map(r => r.length)), ROWS = MAP.length;
-  const LEVEL_W = COLS * T, LEVEL_H = ROWS * T;
+  ], [
+    "                                                                                                                        ",
+    "                                                                                                                        ",
+    "                                      C C C                                      C                                       ",
+    "                                                                                             C C C                      ",
+    "                   C C              111111             C C                    1111111                                  ",
+    "            1111111111                               111111                                    C C                    ",
+    "                                                                                                                     F  ",
+    "                              E                                          E                                             ",
+    "       C C          E      1111111            C C       11111111      111111111        E         111111            111  ",
+    "     111111      111111                 1111111111                                    1111111                       111  ",
+    "  P                                                                                                                     ",
+    "1111111111    111111111111      111111111111       111111111111    11111111111111       111111111111    111111111111111",
+    "1111111111    111111111111      111111111111       111111111111    11111111111111       111111111111    111111111111111",
+  ], [
+    "                                                                                                                                          ",
+    "                                                                                                                                          ",
+    "                              C C C                          C C C                                      C C C                              ",
+    "                         111111111                     111111111                                111111111                                  ",
+    "            C C                                                                                               C C                         ",
+    "         111111                       C C                                       C C                         111111                          ",
+    "                                                                                                                                    F     ",
+    "                  E      11111111   111111         E        111111111       111111          E          111111111               111       ",
+    "      C C      111111                         11111111                                   11111111                               111       ",
+    "    111111                 C C                                           C C                          C C                                 ",
+    "  P                                                                                                                                       ",
+    "111111111   1111111111   1111111111    1111111111    1111111111    1111111111    1111111111    1111111111    111111111111111111111111111",
+    "111111111   1111111111   1111111111    1111111111    1111111111    1111111111    1111111111    1111111111    111111111111111111111111111",
+  ]];
+  const TOTAL_COINS = LEVELS.reduce((sum, map) => sum + map.join("").split("C").length - 1, 0);
+  let levelIndex = 0, COLS = 0, ROWS = 0, LEVEL_W = 0, LEVEL_H = 0;
 
-  const solid = [];
+  let solid = [];
   let spawn = { x: 80, y: 80 }, flag = null;
-  const coinSeed = [], enemySeed = [];
+  let coinSeed = [], enemySeed = [];
 
-  MAP.forEach((row, r) => {
-    for (let c = 0; c < COLS; c++) {
-      const ch = row[c] || " ";
-      const x = c * T, y = r * T;
-      if (ch === "1") solid.push({ x, y, w: T, h: T });
-      else if (ch === "C") coinSeed.push({ x: x + T / 2, y: y + T / 2 });
-      else if (ch === "E") enemySeed.push({ x, y });
-      else if (ch === "F") flag = { x: x + 6, y: y - T * 2, w: 8, h: T * 3 };
-      else if (ch === "P") spawn = { x, y };
-    }
-  });
-  if (!flag) flag = { x: LEVEL_W - 120, y: 200, w: 8, h: T * 3 };
+  function loadLevel(index) {
+    levelIndex = index;
+    const map = LEVELS[levelIndex];
+    COLS = Math.max(...map.map(r => r.length)); ROWS = map.length;
+    LEVEL_W = COLS * T; LEVEL_H = ROWS * T;
+    solid = []; coinSeed = []; enemySeed = []; flag = null;
+    map.forEach((row, r) => {
+      for (let c = 0; c < COLS; c++) {
+        const ch = row[c] || " ", x = c * T, y = r * T;
+        if (ch === "1") solid.push({ x, y, w: T, h: T });
+        else if (ch === "C") coinSeed.push({ x: x + T / 2, y: y + T / 2 });
+        else if (ch === "E") enemySeed.push({ x, y });
+        else if (ch === "F") flag = { x: x + 6, y: y - T * 2, w: 8, h: T * 3 };
+        else if (ch === "P") spawn = { x, y };
+      }
+    });
+    if (!flag) flag = { x: LEVEL_W - 120, y: 200, w: 8, h: T * 3 };
+  }
 
   // ── state ─────────────────────────────────────────────────────────────────
   const player = {
@@ -182,12 +217,12 @@
     jumpFromY: 0, peak: 0, lastJump: 0
   };
   let coins = [], enemies = [], particles = [];
-  let cam = 0, elapsed = 0, score = 0, got = 0, lives = 3;
-  let mode = "title";            // title | play | dead | win | pause
+  let cam = 0, elapsed = 0, score = 0, got = 0, levelGot = 0, lives = 3;
+  let mode = "title";            // title | play | dead | clear | win | pause
   let shake = 0, flagRaise = 0;
 
   const $ = id => document.getElementById(id);
-  const hud = { c: $("hudCoins"), s: $("hudScore"), t: $("hudTime"), l: $("hudLives"), j: $("hudJump") };
+  const hud = { c: $("hudCoins"), n: $("hudLevel"), s: $("hudScore"), t: $("hudTime"), l: $("hudLives"), j: $("hudJump") };
   const overlay = $("overlay"), card = $("card");
 
   function reset(full) {
@@ -198,7 +233,9 @@
       x: e.x, y: e.y + T - 30, w: 30, h: 30, vx: 62 * (Math.random() < .5 ? -1 : 1), alive: true, squash: 0
     }));
     particles = []; cam = 0; flagRaise = 0;
-    if (full) { elapsed = 0; score = 0; got = 0; lives = 3; }
+    levelGot = 0;
+    if (full) { loadLevel(0); elapsed = 0; score = 0; got = 0; lives = 3; reset(false); return; }
+    hud.n.textContent = `${levelIndex + 1}/${LEVELS.length}`;
   }
 
   // ── input ─────────────────────────────────────────────────────────────────
@@ -212,7 +249,10 @@
     if (k) { e.preventDefault(); if (!keys[k]) if (k === "jump") player.buffer = BUFFER; keys[k] = true; }
     if (e.code === "KeyR") { e.preventDefault(); start(true); }
     if (e.code === "KeyP") { e.preventDefault(); if (mode === "play") pause(); else if (mode === "pause") resume(); }
-    if (e.code === "Enter" && (mode === "title" || mode === "win" || mode === "dead")) start(true);
+    if (e.code === "Enter") {
+      if (mode === "clear") nextLevel();
+      else if (mode === "title" || mode === "win" || mode === "dead") start(true);
+    }
   }, { passive: false });
   addEventListener("keyup", e => { const k = CODE[e.code]; if (k) { e.preventDefault(); keys[k] = false; } }, { passive: false });
 
@@ -315,7 +355,7 @@
       if (c.got) continue;
       c.t += dt * 4;
       if (Math.abs((player.x + player.w / 2) - c.x) < 24 && Math.abs((player.y + player.h / 2) - c.y) < 24) {
-        c.got = true; got++; score += 100;
+        c.got = true; got++; levelGot++; score += 100;
         puff(c.x, c.y, 10, "rgba(255,209,102,.95)");
       }
     }
@@ -324,7 +364,11 @@
     if (player.y > LEVEL_H + 200) die();
 
     // flag
-    if (hit(player, flag)) { mode = "win"; score += Math.max(0, 3000 - Math.floor(elapsed * 40)); showWin(); }
+    if (hit(player, flag)) {
+      score += Math.max(0, 3000 - Math.floor(elapsed * 15));
+      if (levelIndex < LEVELS.length - 1) { mode = "clear"; showLevelClear(); }
+      else { mode = "win"; showWin(); }
+    }
 
     // particles
     for (const p of particles) { p.vy += 900 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt; }
@@ -483,7 +527,7 @@
     screen(`
       <h2>Avatar Dash</h2>
       <p>
-        Reach the flag at the far right.<br />
+        Beat three increasingly long levels and reach each flag.<br />
         Land on an enemy to squash it — touch one from the side and you lose a life.<br />
         Hold the jump key longer to jump higher.
       </p>
@@ -492,15 +536,29 @@
       </div>`);
     document.getElementById("go").onclick = () => start(true);
   }
+  function showLevelClear() {
+    screen(`
+      <h2>Level ${levelIndex + 1} clear</h2>
+      <p>
+        Level coins <b>${levelGot}/${coins.length}</b> &nbsp;·&nbsp; Total score <b>${score}</b><br />
+        Ready for level ${levelIndex + 2}?
+      </p>
+      <div class="row"><button class="btn" id="next">Next level</button></div>`);
+    document.getElementById("next").onclick = nextLevel;
+  }
+  function nextLevel() {
+    loadLevel(levelIndex + 1);
+    reset(false); hideScreen(); mode = "play";
+  }
   function showWin() {
     screen(`
-      <h2>Flag reached</h2>
+      <h2>All levels cleared!</h2>
       <p>
-        Coins <b>${got}/${coins.length}</b> &nbsp;·&nbsp; Time <b>${elapsed.toFixed(1)}s</b> &nbsp;·&nbsp;
+        Coins <b>${got}/${TOTAL_COINS}</b> &nbsp;·&nbsp; Time <b>${elapsed.toFixed(1)}s</b> &nbsp;·&nbsp;
         Score <b>${score}</b>
       </p>
       <div class="row">
-        <button class="btn" id="again">Play again</button>
+        <button class="btn" id="again">Play all levels again</button>
       </div>`);
     document.getElementById("again").onclick = () => start(true);
   }
@@ -534,6 +592,7 @@
     requestAnimationFrame(frame);
   }
 
+  loadLevel(0);
   reset(true);
   showTitle();
   requestAnimationFrame(frame);

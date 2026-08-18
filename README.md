@@ -2,8 +2,9 @@
 
 **▶ [Play now](https://renrenmimi.github.io/avatar-dash/)** — runs in your browser, nothing to install.
 
-A side-scrolling platformer where the player character is my GitHub avatar. Run,
-jump, stomp the enemies, collect the coins, reach the flag.
+A three-level side-scrolling platformer where the player character is my GitHub avatar.
+Run, jump, stomp the enemies, collect the coins, and reach each flag. Every level is
+longer than the one before it, with more platforms, gaps, coins, and enemies.
 
 ![The level, with the avatar on the starting platform](docs/screenshot.jpg)
 
@@ -28,6 +29,7 @@ On a touch screen the on-screen buttons appear automatically.
 - **Stomp to kill** — landing on an enemy squashes it and bounces you; touching one from the
   side costs a life
 - **Enemies turn at edges** — they check for ground ahead and reverse instead of walking off
+- **Three progressively longer levels** — score, lives, coins, and time carry across the full run
 - **Fixed timestep physics** at 120 Hz, decoupled from the render loop, so the feel does not
   change with frame rate
 - **Parallax background**, screen shake on impact, and particle bursts
