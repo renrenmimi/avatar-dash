@@ -2,7 +2,7 @@
 
 **▶ [Play now](https://renrenmimi.github.io/avatar-dash/)** — runs in your browser, nothing to install.
 
-A small side-scrolling platformer where the player character is my GitHub avatar. Run,
+A side-scrolling platformer where the player character is my GitHub avatar. Run,
 jump, stomp the enemies, collect the coins, reach the flag.
 
 ![The level, with the avatar on the starting platform](docs/screenshot.jpg)
