@@ -5,6 +5,10 @@
 A small side-scrolling platformer where the player character is my GitHub avatar. Run,
 jump, stomp the enemies, collect the coins, reach the flag.
 
+![The level, with the avatar on the starting platform](docs/screenshot.jpg)
+
+*The level, with the avatar on the starting platform*
+
 ## Controls
 
 | Action | Keys |
