@@ -2,9 +2,9 @@
 
 **▶ [Play now](https://renrenmimi.github.io/avatar-dash/)** — runs in your browser, nothing to install.
 
-A three-level side-scrolling platformer where the player character is my GitHub avatar.
-Run, jump, stomp the enemies, collect the coins, and reach each flag. Every level is
-longer than the one before it, with more platforms, gaps, coins, and enemies.
+A six-level side-scrolling platformer across three themed worlds. The player starts as
+my GitHub avatar, then transforms into a larger dog avatar after collecting a dog treat.
+Run, jump, stomp enemies, collect coins, and reach each flag.
 
 ![The level, with the avatar on the starting platform](docs/screenshot.jpg)
 
@@ -29,15 +29,18 @@ On a touch screen the on-screen buttons appear automatically.
 - **Stomp to kill** — landing on an enemy squashes it and bounces you; touching one from the
   side costs a life
 - **Enemies turn at edges** — they check for ground ahead and reverse instead of walking off
-- **Three progressively longer levels** — score, lives, coins, and time carry across the full run
+- **Six progressively longer levels** across Neon Skyline, Sunset Canyon, and Moonlit Grove
+- **Dog Mode power-up** — treats transform the player into a larger dog; the next enemy hit
+  removes the transformation instead of costing a life
+- **Full-run progression** — score, lives, coins, time, and active Dog Mode carry between levels
 - **Fixed timestep physics** at 120 Hz, decoupled from the render loop, so the feel does not
   change with frame rate
 - **Parallax background**, screen shake on impact, and particle bursts
 
 ## Tech
 
-One HTML file, Canvas 2D. The avatar is embedded as a
-base64 data URI, so the page works offline once loaded.
+Canvas 2D with no runtime dependencies. The starting avatar is embedded in the HTML;
+the optimized Dog Mode portrait is included as a local PNG asset.
 
 Physics and level layout were verified with a Node script before release: no tunnelling
 through blocks at full speed, jump height clears a two-tile gap, the flag has ground under
