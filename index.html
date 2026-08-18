@@ -124,18 +124,11 @@
   const T = 40;                 // tile size
   const GRAVITY = 2400;         // px/s²
   const MOVE = 1500, MAXVX = 340, FRICTION = 1800;
-  // Jump. The tallest step in the level is 3 tiles (120px).
-  //
-  // Every jump starts at JUMP_V, which on its own peaks at ~140px — enough to clear the
-  // level even if you only tap. Holding the key applies reduced gravity while rising, so
-  // a held jump keeps climbing to ~195px.
-  //
-  // The earlier approach (scale the velocity down on release) only mattered within ~37ms
-  // of takeoff; after that the velocity had already decayed past the clamp on its own, so
-  // every press longer than a frame or two produced an identical height.
-  const JUMP_V = 730;       // tapped → ~111px (3.3x body height)
-  const HOLD_GRAV = 0.63;   // held → ~176px (5.2x body height, matching the genre)
-  const JUMP_CUT = 0.45;        // release early → clip the rise
+  // Releasing jump immediately cuts the remaining upward speed. A quick tap stays low
+  // enough for precise platforming, while holding still clears the tallest steps.
+  const JUMP_V = 730;
+  const HOLD_GRAV = 0.63;
+  const JUMP_CUT = 0.45;
   const COYOTE = 0.10, BUFFER = 0.12;
   const STOMP_BOUNCE = 520;
   const DT = 1 / 120;           // fixed physics step
@@ -307,6 +300,8 @@
       player.jumpFromY = player.y; player.peak = 0;
       puff(player.x + player.w / 2, player.y + player.h, 6, "rgba(255,255,255,.5)");
     }
+    // Cut upward momentum once on release so a tap produces a genuinely short hop.
+    if (!keys.jump && player.jumpHeld && player.vy < 0) player.vy *= JUMP_CUT;
     // Let go, or start falling, and the assist ends for this jump — pressing again in
     // mid-air must not restart it.
     if (!keys.jump || player.vy >= 0) player.jumpHeld = false;
