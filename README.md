@@ -36,7 +36,7 @@ On a touch screen the on-screen buttons appear automatically.
 
 ## Tech
 
-One HTML file, Canvas 2D, no dependencies, no build step. The avatar is embedded as a
+One HTML file, Canvas 2D. The avatar is embedded as a
 base64 data URI, so the page works offline once loaded.
 
 Physics and level layout were verified with a Node script before release: no tunnelling
