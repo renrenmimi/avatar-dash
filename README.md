@@ -22,11 +22,9 @@ On a touch screen the on-screen buttons appear automatically.
 
 ## What is in it
 
-- **Variable-height jumping** — releasing the key early cuts the rise short, so short taps
-  and long holds give you real control
+- **Variable-height jumping** — releasing the key early cuts the rise short, so tap height differs from hold height
 - **Coyote time and input buffering** — you can still jump for 100 ms after walking off an
-  edge, and a jump pressed just before landing still fires. Both are what make a platformer
-  feel fair rather than stiff
+  edge, and a jump pressed just before landing still fires.
 - **Stomp to kill** — landing on an enemy squashes it and bounces you; touching one from the
   side costs a life
 - **Enemies turn at edges** — they check for ground ahead and reverse instead of walking off
