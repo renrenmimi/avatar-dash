@@ -33,6 +33,13 @@
              padding:5px 11px; backdrop-filter:blur(6px); display:flex; gap:7px; align-items:center}
   .hud .k{color:var(--faint)}
   .hud .v{color:var(--ink); font-variant-numeric:tabular-nums}
+  .hud .v.ahead{color:#7ee7a5}
+  .hud .v.behind{color:#ff9b9b}
+  .hud .best{color:var(--gold); font-variant-numeric:tabular-nums}
+  .hud .best:empty{display:none}
+  .hud .pill[hidden]{display:none}
+  .ghost-dot{width:9px;height:9px;border-radius:50%;background:rgba(139,147,255,.18);
+             border:1.5px dashed var(--accent2)}
   .coin-dot{width:9px;height:9px;border-radius:50%;background:var(--gold);box-shadow:0 0 8px rgba(255,209,102,.8)}
   .life-dot{width:9px;height:9px;border-radius:50%;background:var(--danger);box-shadow:0 0 8px rgba(255,107,107,.7)}
   .power-dot{width:9px;height:9px;border-radius:3px;background:#ff9f43;box-shadow:0 0 8px rgba(255,159,67,.8)}
@@ -49,6 +56,24 @@
   .btn:hover{filter:brightness(1.07); transform:translateY(-1px)}
   .btn.ghost{background:transparent; border-color:var(--line); color:var(--ink)}
   .row{display:flex; gap:10px; justify-content:center; flex-wrap:wrap}
+  .tline{margin:0 0 14px !important; font-size:12px}
+  .tline b{color:var(--gold); font-variant-numeric:tabular-nums}
+  .levels{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin:0 0 16px}
+  @media (max-width:560px){ .levels{grid-template-columns:repeat(2,minmax(0,1fr))} }
+  .lvl{appearance:none; cursor:pointer; text-align:left; font:inherit; color:var(--ink);
+       background:rgba(20,26,38,.6); border:1px solid var(--line); border-radius:10px; padding:8px 11px;
+       display:flex; flex-direction:column; gap:2px; transition:border-color .15s ease, transform .15s ease}
+  .lvl:hover{border-color:var(--accent); transform:translateY(-1px)}
+  .lvl .n{color:var(--faint); font-size:10.5px; letter-spacing:.06em; white-space:nowrap;
+          overflow:hidden; text-overflow:ellipsis}
+  .lvl .t{font-size:13px; color:var(--gold); font-variant-numeric:tabular-nums}
+  .lvl .t.none{color:var(--faint)}
+  .lvl .g{font-size:10.5px; color:var(--accent2); letter-spacing:.04em; min-height:14px}
+  .newbest{display:inline-block; margin:0 0 12px; padding:4px 12px; border-radius:999px;
+           background:rgba(255,209,102,.14); border:1px solid rgba(255,209,102,.5); color:var(--gold);
+           font-size:12px; letter-spacing:.1em; animation:bestPulse 1.4s ease-in-out infinite}
+  @keyframes bestPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,209,102,.4)}50%{box-shadow:0 0 0 9px rgba(255,209,102,0)}}
+  .note{color:var(--faint); font-size:11.5px; margin:12px 0 0 !important}
   .hint{color:var(--faint); font-size:12px; text-align:center; max-width:960px}
   .touch{position:absolute; inset:auto 0 0; display:none; justify-content:space-between; padding:14px; pointer-events:none}
   .touch .side{display:flex; gap:10px; pointer-events:auto}
@@ -77,7 +102,9 @@
     <div class="pill"><span class="k">level</span><span class="v" id="hudLevel">1/6</span></div>
     <div class="pill"><span class="power-dot"></span><span class="k">power</span><span class="v" id="hudPower">normal</span></div>
     <div class="pill"><span class="k">score</span><span class="v" id="hudScore">0</span></div>
-    <div class="pill"><span class="k">time</span><span class="v" id="hudTime">0.0</span></div>
+    <div class="pill"><span class="k">time</span><span class="v" id="hudTime">0.0</span><span class="best" id="hudBest"></span></div>
+    <div class="pill"><span class="k">total</span><span class="v" id="hudTotal">0.0</span></div>
+    <div class="pill" id="hudGhostPill" hidden><span class="ghost-dot"></span><span class="k">ghost</span><span class="v" id="hudGhost">—</span></div>
     <div class="pill"><span class="life-dot"></span><span class="k">lives</span><span class="v" id="hudLives">3</span></div>
     <div class="pill"><span class="k">jump</span><span class="v" id="hudJump">—</span></div>
   </div>
@@ -255,6 +282,84 @@
     if (!flag) flag = { x: LEVEL_W - 120, y: 200, w: 8, h: T * 3 };
   }
 
+  // ── records: best times, total, and ghost traces ──────────────────────────
+  // Every call into localStorage is best-effort. Private mode, a disabled store
+  // or a full quota has to degrade into "no ghost yet", never take the game down.
+  const STORE_KEY = "avatarDash.records.v1";
+  const REC_STEP = 1 / 20;      // ghost sample interval in seconds
+  const MAX_SAMPLES = 900;      // hard cap; a longer run halves its own rate in place
+  const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-";
+  const B64I = Object.create(null);
+  for (let i = 0; i < 64; i++) B64I[B64[i]] = i;
+  const BIAS = 2048;            // deltas ride in a 12-bit window: two chars each
+
+  const encDelta = v => {
+    const n = Math.max(-BIAS, Math.min(BIAS - 1, Math.round(v))) + BIAS;
+    return B64[(n >> 6) & 63] + B64[n & 63];
+  };
+  const decDelta = (s, i) => {
+    const hi = B64I[s[i]], lo = B64I[s[i + 1]];
+    return hi === undefined || lo === undefined ? NaN : ((hi << 6) | lo) - BIAS;
+  };
+
+  // A trace is a flat [cx, footY, …] list. Only the first point is absolute;
+  // the rest are per-step deltas, so a 45 s run costs about 3.6 KB of storage.
+  function encodeTrace(pts, step) {
+    const n = pts.length >> 1;
+    let px = Math.round(pts[0]), py = Math.round(pts[1]), d = "";
+    for (let i = 1; i < n; i++) {
+      const x = Math.round(pts[i * 2]), y = Math.round(pts[i * 2 + 1]);
+      d += encDelta(x - px) + encDelta(y - py);
+      px = x; py = y;
+    }
+    return { n, s: +step.toFixed(4), x: Math.round(pts[0]), y: Math.round(pts[1]), d };
+  }
+
+  function decodeTrace(g) {
+    if (!g || typeof g.d !== "string") return null;
+    const n = g.n | 0, step = +g.s || REC_STEP;
+    if (n < 2 || g.d.length < (n - 1) * 4) return null;
+    const xs = new Float64Array(n), ys = new Float64Array(n);
+    xs[0] = +g.x || 0; ys[0] = +g.y || 0;
+    for (let i = 1; i < n; i++) {
+      const o = (i - 1) * 4, dx = decDelta(g.d, o), dy = decDelta(g.d, o + 2);
+      if (Number.isNaN(dx) || Number.isNaN(dy)) return null;
+      xs[i] = xs[i - 1] + dx; ys[i] = ys[i - 1] + dy;
+    }
+    return { n, step, xs, ys, span: (n - 1) * step };
+  }
+
+  let records = null, storageOk = true;
+
+  function getRecords() {
+    if (records) return records;
+    let parsed = null;
+    try { const raw = localStorage.getItem(STORE_KEY); parsed = raw ? JSON.parse(raw) : null; }
+    catch (e) { storageOk = false; }
+    records = parsed && typeof parsed === "object" ? parsed : {};
+    if (!records.levels || typeof records.levels !== "object") records.levels = {};
+    return records;
+  }
+  function persist() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(getRecords())); storageOk = true; return true; }
+    catch (e) { storageOk = false; return false; }
+  }
+  function clearRecords() {
+    try { localStorage.removeItem(STORE_KEY); } catch (e) { /* nothing we can do */ }
+    records = { levels: {} }; storageOk = true;
+  }
+  function saveLevelRecord(index, t, rec) {
+    const entry = { t: +t.toFixed(3) };
+    if (rec && rec.pts.length >= 4) entry.g = encodeTrace(rec.pts, rec.step);
+    getRecords().levels[index] = entry;
+    // If the write bounced off the quota, the ghost is the first thing to drop.
+    if (!persist() && entry.g) { delete entry.g; persist(); }
+  }
+  const levelEntry = i => getRecords().levels[i] || null;
+  const bestFor = i => { const r = levelEntry(i); return r && typeof r.t === "number" ? r.t : null; };
+  const bestTotal = () => { const t = getRecords().total; return typeof t === "number" ? t : null; };
+  const secs = t => t == null ? "—" : t.toFixed(2) + "s";
+
   // ── state ─────────────────────────────────────────────────────────────────
   const player = {
     x: 0, y: 0, w: 34, h: 34, vx: 0, vy: 0,
@@ -267,8 +372,43 @@
   let shake = 0, flagRaise = 0;
 
   const $ = id => document.getElementById(id);
-  const hud = { c: $("hudCoins"), n: $("hudLevel"), p: $("hudPower"), s: $("hudScore"), t: $("hudTime"), l: $("hudLives"), j: $("hudJump") };
+  const hud = { c: $("hudCoins"), n: $("hudLevel"), p: $("hudPower"), s: $("hudScore"), t: $("hudTime"),
+                l: $("hudLives"), j: $("hudJump"), b: $("hudBest"), tot: $("hudTotal"),
+                g: $("hudGhost"), gp: $("hudGhostPill") };
   const overlay = $("overlay"), card = $("card");
+
+  // ── the current attempt: its clock, its recording, and the ghost racing it ─
+  let attemptStart = 0, startedFrom = 0;
+  let recorder = null, ghost = null, ghostAt = 0, ghostReach = 0, ghostDelta = 0;
+  let clearResult = null, winResult = null;
+  const levelTime = () => Math.max(0, elapsed - attemptStart);
+
+  // A level attempt is one clean spawn-to-flag run: dying restarts the clock and
+  // throws the half-finished trace away, so a stored ghost is never stitched
+  // together from several lives.
+  function beginAttempt() {
+    attemptStart = elapsed;
+    recorder = { pts: [player.x + player.w / 2, player.y + player.h], acc: 0, step: REC_STEP };
+    const entry = levelEntry(levelIndex);
+    ghost = entry && entry.g ? decodeTrace(entry.g) : null;
+    ghostAt = 0; ghostReach = 0; ghostDelta = 0;
+    hud.gp.hidden = !ghost;
+    hud.g.textContent = "—"; hud.g.className = "v";
+  }
+
+  function ghostAtTime(t) {
+    if (!ghost) return null;
+    const f = t / ghost.step;
+    if (!(f > 0)) return { x: ghost.xs[0], y: ghost.ys[0], done: false };
+    const i = Math.floor(f);
+    if (i >= ghost.n - 1) return { x: ghost.xs[ghost.n - 1], y: ghost.ys[ghost.n - 1], done: true };
+    const a = f - i;
+    return {
+      x: ghost.xs[i] + (ghost.xs[i + 1] - ghost.xs[i]) * a,
+      y: ghost.ys[i] + (ghost.ys[i + 1] - ghost.ys[i]) * a,
+      done: false
+    };
+  }
 
   function reset(full) {
     player.x = spawn.x; player.y = spawn.y;
@@ -284,6 +424,7 @@
     if (full) { loadLevel(0); elapsed = 0; score = 0; got = 0; lives = 3; reset(false); return; }
     hud.n.textContent = `${levelIndex + 1}/${LEVELS.length}`;
     hud.p.textContent = "normal";
+    beginAttempt();
   }
 
   function setPowered(on) {
@@ -435,11 +576,33 @@
     // fell off the world
     if (player.y > LEVEL_H + 200) die();
 
+    // ghost recording: a fixed-rate position trace, capped so a slow run cannot
+    // grow without bound — past the cap it keeps every second sample instead.
+    if (recorder) {
+      recorder.acc += dt;
+      while (recorder.acc >= recorder.step) {
+        recorder.acc -= recorder.step;
+        recorder.pts.push(player.x + player.w / 2, player.y + player.h);
+        if (recorder.pts.length >= MAX_SAMPLES * 2) {
+          const half = [];
+          for (let i = 0; i < recorder.pts.length; i += 4) half.push(recorder.pts[i], recorder.pts[i + 1]);
+          recorder.pts = half; recorder.step *= 2; recorder.acc = 0;
+        }
+      }
+    }
+
+    // how far ahead of (or behind) the best run this attempt is, measured by the
+    // time each took to reach the furthest point the player has got to
+    if (ghost) {
+      ghostReach = Math.max(ghostReach, player.x + player.w / 2);
+      while (ghostAt < ghost.n - 1 && ghost.xs[ghostAt] < ghostReach) ghostAt++;
+      ghostDelta = levelTime() - ghostAt * ghost.step;
+    }
+
     // flag
     if (hit(player, flag)) {
       score += Math.max(0, 3000 - Math.floor(elapsed * 15));
-      if (levelIndex < LEVELS.length - 1) { mode = "clear"; showLevelClear(); }
-      else { mode = "win"; showWin(); }
+      finishLevel();
     }
 
     // particles
@@ -453,9 +616,39 @@
 
     hud.c.textContent = got;
     hud.s.textContent = score;
-    hud.t.textContent = elapsed.toFixed(1);
+    hud.t.textContent = levelTime().toFixed(1);
+    hud.tot.textContent = elapsed.toFixed(1);
+    const pb = bestFor(levelIndex);
+    hud.b.textContent = pb == null ? "" : "best " + pb.toFixed(2);
     hud.l.textContent = lives;
     hud.j.textContent = player.lastJump ? Math.round(player.lastJump) + "px" : "—";
+    if (ghost) {
+      hud.g.textContent = (ghostDelta <= 0 ? "-" : "+") + Math.abs(ghostDelta).toFixed(1);
+      hud.g.className = "v " + (ghostDelta <= 0 ? "ahead" : "behind");
+    }
+  }
+
+  function finishLevel() {
+    const t = levelTime();
+    const prev = bestFor(levelIndex);
+    const beat = prev == null || t < prev - 0.001;
+    clearResult = { time: t, prev, beat };
+    if (beat) {
+      saveLevelRecord(levelIndex, t, recorder);
+      shake = 10;
+      puff(flag.x + 4, flag.y + T, 26, "rgba(255,209,102,.95)");
+    }
+    recorder = null;
+
+    if (levelIndex < LEVELS.length - 1) { mode = "clear"; showLevelClear(); return; }
+
+    // A total only counts as a full completion when the run began at level 1.
+    const prevTotal = bestTotal();
+    const fullRun = startedFrom === 0;
+    const beatTotal = fullRun && (prevTotal == null || elapsed < prevTotal - 0.001);
+    winResult = { time: elapsed, prev: prevTotal, beat: beatTotal, fullRun };
+    if (beatTotal) { getRecords().total = +elapsed.toFixed(3); persist(); }
+    mode = "win"; showWin();
   }
 
   function puff(x, y, n, color) {
@@ -571,6 +764,33 @@
     }
     ctx.globalAlpha = 1;
 
+    // ghost of the best run so far, replayed against the attempt clock
+    const gnow = ghost && mode !== "title" ? ghostAtTime(levelTime()) : null;
+    if (gnow && gnow.x > cam - 80 && gnow.x < cam + W + 80) {
+      const r = 17, t = levelTime();
+      for (let k = 3; k >= 1; k--) {
+        const gt = ghostAtTime(t - k * 0.07);
+        if (!gt) continue;
+        ctx.globalAlpha = (gnow.done ? .03 : .06) * (4 - k);
+        ctx.beginPath(); ctx.arc(gt.x, gt.y - r, r * (1 - k * .08), 0, 6.283);
+        ctx.fillStyle = "#8b93ff"; ctx.fill();
+      }
+      ctx.save();
+      ctx.globalAlpha = gnow.done ? .2 : .42;
+      ctx.translate(gnow.x, gnow.y - r);
+      ctx.beginPath(); ctx.arc(0, 0, r + 5, 0, 6.283);
+      ctx.fillStyle = "rgba(139,147,255,.3)"; ctx.fill();
+      if (avatarReady) {
+        ctx.save(); ctx.beginPath(); ctx.arc(0, 0, r, 0, 6.283); ctx.clip();
+        ctx.drawImage(avatar, -r, -r, r * 2, r * 2); ctx.restore();
+      }
+      ctx.beginPath(); ctx.arc(0, 0, r, 0, 6.283);
+      ctx.lineWidth = 2; ctx.setLineDash([4, 4]); ctx.strokeStyle = "#8b93ff"; ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
+
     // player (the avatar)
     if (!player.dead || mode === "play") {
       const cx = player.x + player.w / 2, cy = player.y + player.h / 2;
@@ -613,33 +833,69 @@
   function screen(html) { card.innerHTML = html; overlay.classList.add("on"); }
   function hideScreen() { overlay.classList.remove("on"); }
 
+  function levelRoster() {
+    return `<div class="levels">` + LEVELS.map((_, i) => {
+      const t = bestFor(i), hasGhost = !!(levelEntry(i) || {}).g;
+      return `<button class="lvl" data-lvl="${i}">
+        <span class="n">LEVEL ${i + 1} · ${SCENES[sceneForLevel(i)].name}</span>
+        <span class="t${t == null ? " none" : ""}">${t == null ? "no time yet" : secs(t)}</span>
+        <span class="g">${hasGhost ? "ghost ready" : ""}</span>
+      </button>`;
+    }).join("") + `</div>`;
+  }
+  function wireRoster() {
+    card.querySelectorAll(".lvl").forEach(b => { b.onclick = () => startAt(+b.dataset.lvl); });
+    const wipe = document.getElementById("clearRecords");
+    if (wipe) wipe.onclick = () => { clearRecords(); showTitle(); };
+  }
+
   function showTitle() {
     mode = "title";
+    const bt = bestTotal();
     screen(`
       <h2>Avatar Dash</h2>
       <p>
         Cross <b>6 levels</b> and <b>3 worlds</b> to reach every flag.<br />
         Grab a dog treat to grow into Dog Mode — the next enemy hit breaks the power instead of costing a life.<br />
         Land on an enemy to squash it — touch one from the side and you lose a life.<br />
-        Hold the jump key longer to jump higher.
+        Hold the jump key longer to jump higher.<br />
+        Beat a level and your best run comes back as a ghost to race the next time.
       </p>
+      <p class="tline">Best full run <b>${secs(bt)}</b> &nbsp;·&nbsp; pick a level to practise it</p>
+      ${levelRoster()}
       <div class="row">
-        <button class="btn" id="go">Start</button>
-      </div>`);
+        <button class="btn" id="go">Start from level 1</button>
+        <button class="btn ghost" id="clearRecords">Clear times &amp; ghosts</button>
+      </div>
+      ${storageOk ? "" : `<p class="note">This browser is not storing anything — times and ghosts last only for this session.</p>`}`);
     document.getElementById("go").onclick = () => start(true);
+    wireRoster();
   }
   function showLevelClear() {
     const currentScene = SCENES[sceneForLevel(levelIndex)];
     const nextScene = SCENES[sceneForLevel(levelIndex + 1)];
     const sceneChange = currentScene !== nextScene ? `<br /><b>New world unlocked: ${nextScene.name}</b>` : "";
+    const r = clearResult || { time: levelTime(), prev: null, beat: false };
+    const badge = r.beat ? `<div class="newbest" id="newBest">NEW BEST TIME</div>` : "";
+    const line = r.beat
+      ? (r.prev == null ? `First clear — <b>${secs(r.time)}</b> is the time to beat.`
+                        : `<b>${secs(r.time)}</b>, ${(r.prev - r.time).toFixed(2)}s faster than ${secs(r.prev)}.`)
+      : `<b>${secs(r.time)}</b> &nbsp;·&nbsp; best <b>${secs(r.prev)}</b> (+${(r.time - r.prev).toFixed(2)}s)`;
     screen(`
       <h2>Level ${levelIndex + 1} clear</h2>
+      ${badge}
       <p>
-        Level coins <b>${levelGot}/${coins.length}</b> &nbsp;·&nbsp; Total score <b>${score}</b><br />
+        Time ${line}<br />
+        Level coins <b>${levelGot}/${coins.length}</b> &nbsp;·&nbsp; Total score <b>${score}</b> &nbsp;·&nbsp;
+        Run total <b>${secs(elapsed)}</b><br />
         Ready for level ${levelIndex + 2}?${sceneChange}
       </p>
-      <div class="row"><button class="btn" id="next">Next level</button></div>`);
+      <div class="row">
+        <button class="btn" id="next">Next level</button>
+        <button class="btn ghost" id="again">Race that time again</button>
+      </div>`);
     document.getElementById("next").onclick = nextLevel;
+    document.getElementById("again").onclick = retryLevel;
   }
   function nextLevel() {
     const carryPower = player.powered;
@@ -648,16 +904,29 @@
     hideScreen(); mode = "play";
   }
   function showWin() {
+    const r = winResult || { time: elapsed, prev: bestTotal(), beat: false, fullRun: false };
+    const badge = r.beat ? `<div class="newbest" id="newBest">NEW BEST FULL RUN</div>` : "";
+    const total = r.fullRun
+      ? (r.beat
+          ? (r.prev == null ? `Completion time <b>${secs(r.time)}</b> — the first one on the board.`
+                            : `Completion time <b>${secs(r.time)}</b>, ${(r.prev - r.time).toFixed(2)}s off the old ${secs(r.prev)}.`)
+          : `Completion time <b>${secs(r.time)}</b> &nbsp;·&nbsp; best <b>${secs(r.prev)}</b>`)
+      : `Run time <b>${secs(r.time)}</b> — started at level ${startedFrom + 1}, so it is not a full completion. Best full run <b>${secs(r.prev)}</b>.`;
     screen(`
       <h2>All 3 worlds cleared!</h2>
+      ${badge}
       <p>
-        Coins <b>${got}/${TOTAL_COINS}</b> &nbsp;·&nbsp; Time <b>${elapsed.toFixed(1)}s</b> &nbsp;·&nbsp;
-        Score <b>${score}</b>
+        ${total}<br />
+        Coins <b>${got}/${TOTAL_COINS}</b> &nbsp;·&nbsp; Score <b>${score}</b>
       </p>
+      <p class="tline">Level bests</p>
+      ${levelRoster()}
       <div class="row">
-        <button class="btn" id="again">Play all levels again</button>
+        <button class="btn" id="go">Play all levels again</button>
+        <button class="btn ghost" id="clearRecords">Clear times &amp; ghosts</button>
       </div>`);
-    document.getElementById("again").onclick = () => start(true);
+    document.getElementById("go").onclick = () => start(true);
+    wireRoster();
   }
   function showOver() {
     mode = "dead";
@@ -669,14 +938,47 @@
   }
   function pause() {
     mode = "pause";
-    screen(`<h2>Paused</h2><p>Press <kbd>P</kbd> to continue.</p>
+    const pb = bestFor(levelIndex);
+    screen(`<h2>Paused</h2>
+            <p>Press <kbd>P</kbd> to continue.<br />
+            This level ${pb == null ? "has no best time yet" : `best <b>${secs(pb)}</b>`} &nbsp;·&nbsp;
+            run total <b>${secs(elapsed)}</b></p>
             <div class="row"><button class="btn" id="res">Resume</button>
-            <button class="btn ghost" id="rs">Restart</button></div>`);
+            <button class="btn ghost" id="retry">Retry level</button>
+            <button class="btn ghost" id="rs">Restart run</button></div>`);
     document.getElementById("res").onclick = resume;
+    document.getElementById("retry").onclick = retryLevel;
     document.getElementById("rs").onclick = () => start(true);
   }
   function resume() { hideScreen(); mode = "play"; }
-  function start(full) { reset(full); hideScreen(); mode = "play"; }
+  function start(full) { if (full) startedFrom = 0; reset(full); hideScreen(); mode = "play"; }
+  function retryLevel() { reset(false); hideScreen(); mode = "play"; }
+  function startAt(i) {
+    reset(true);
+    if (i > 0) { loadLevel(i); reset(false); }
+    startedFrom = i;
+    hideScreen(); mode = "play";
+  }
+
+  // ── read-only snapshot, for the browser console and automated checks ──────
+  window.__avatarDash = {
+    storageKey: STORE_KEY,
+    state: () => ({
+      mode, level: levelIndex, lives, score, elapsed, levelTime: levelTime(), startedFrom,
+      player: { x: player.x, y: player.y, w: player.w, h: player.h,
+                vx: player.vx, vy: player.vy, onGround: player.onGround, powered: player.powered },
+      levelWidth: LEVEL_W, levelHeight: LEVEL_H, cam,
+      flag: flag ? { x: flag.x, y: flag.y, w: flag.w, h: flag.h } : null,
+      samples: recorder ? recorder.pts.length / 2 : 0,
+      storageOk,
+      ghost: ghost
+        ? { n: ghost.n, step: ghost.step, span: ghost.span, delta: ghostDelta, pos: ghostAtTime(levelTime()) }
+        : null
+    }),
+    records: () => { try { return JSON.parse(JSON.stringify(getRecords())); } catch (e) { return null; } },
+    solids: () => solid.map(s => ({ x: s.x, y: s.y, w: s.w, h: s.h })),
+    enemies: () => enemies.filter(e => e.alive).map(e => ({ x: e.x, y: e.y, w: e.w, h: e.h, vx: e.vx }))
+  };
 
   // ── loop ──────────────────────────────────────────────────────────────────
   let last = performance.now(), acc = 0;

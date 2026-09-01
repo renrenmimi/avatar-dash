@@ -33,6 +33,14 @@ On a touch screen the on-screen buttons appear automatically.
 - **Dog Mode power-up** — treats transform the player into a larger dog; the next enemy hit
   removes the transformation instead of costing a life
 - **Full-run progression** — score, lives, coins, time, and active Dog Mode carry between levels
+- **Best times per level and a full-run completion time**, kept in `localStorage` and shown on
+  the title roster, the clear screen, and the HUD. Beating one is called out on the spot, and a
+  button on the title screen wipes every stored time and ghost.
+- **Ghost replay** — your best run of a level comes back as a translucent racer. It is a
+  position trace sampled 20 times a second, stored as two-character deltas and capped at 900
+  samples, so a long run halves its own sample rate instead of growing without bound. The HUD
+  shows how far ahead or behind that ghost you are.
+- **Level select** from the title screen, so a level can be practised against its own ghost
 - **Fixed timestep physics** at 120 Hz, decoupled from the render loop, so the feel does not
   change with frame rate
 - **Parallax background**, screen shake on impact, and particle bursts
